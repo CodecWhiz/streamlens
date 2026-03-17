@@ -1,133 +1,94 @@
-# 📡 StreamLens
+# StreamLens
 
-**Open-source video delivery analytics. ClickHouse-powered, CMCD-native.**
+**Open-source, ClickHouse-powered video delivery analytics engine.**
 
-StreamLens ingests [CMCD (Common Media Client Data)](https://cdn.cta.tech/cta/media/media/resources/standards/pdfs/cta-5004-final.pdf) telemetry from video players, stores it in ClickHouse, and visualizes quality-of-experience metrics in Grafana dashboards — all in a single binary.
+StreamLens ingests [CTA-5004 CMCD](https://cdn.cta.tech/cta/media/media/resources/standards/pdfs/cta-5004-final.pdf) telemetry from video players, stores it in ClickHouse, and provides real-time dashboards for monitoring video QoE at scale.
 
-[![CI](https://github.com/CodecWhiz/streamlens/actions/workflows/ci.yml/badge.svg)](https://github.com/CodecWhiz/streamlens/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+## Architecture
 
----
+```
+Video Player → CMCD beacon → StreamLens Collector → ClickHouse → Grafana
+```
 
-## ✨ Features
+## Features
 
-- **Full CTA-5004 CMCD parser** — bitrate, buffer, starvation, throughput, session tracking
-- **HTTP beacon collector** — POST JSON or GET with query params
-- **ClickHouse storage** — auto-migrating schema with materialized views
-- **Batch write buffer** — efficient bulk inserts, configurable flush interval
-- **Grafana dashboard** — rebuffer rate, bitrate trends, CDN comparison, session drill-down
-- **Demo generator** — 50 simulated sessions with realistic ABR behavior
-- **Single binary** — `streamlens serve`, `streamlens demo`, `streamlens migrate`
-- **Docker Compose** — one command to run everything
+- **CMCD Parser** — Full CTA-5004 parser, importable as `github.com/CodecWhiz/streamlens/cmcd`
+- **HTTP Collector** — Accepts CMCD via POST (JSON) and GET (query string)
+- **Batch Buffer** — Efficient batched writes to ClickHouse
+- **Auto-Migration** — Creates tables and materialized views on startup
+- **Materialized Views** — Pre-aggregated rebuffer rates, session stats, bitrate distributions
+- **Demo Generator** — Realistic multi-session CMCD traffic for testing
+- **Grafana Dashboards** — Pre-built overview dashboard included
 
-## 🚀 Quickstart
+## Quick Start
 
 ```bash
-git clone https://github.com/CodecWhiz/streamlens.git
-cd streamlens
+# Start ClickHouse + StreamLens + Grafana
 docker compose -f deployments/docker-compose.yml up --build -d
+
+# Generate demo data
+docker compose -f deployments/docker-compose.yml exec streamlens streamlens demo
+
+# Open Grafana at http://localhost:3000 (admin / streamlens)
 ```
 
-Then open:
-- **Grafana** → [http://localhost:3000](http://localhost:3000) (admin / streamlens)
-- **Collector** → [http://localhost:8090/health](http://localhost:8090/health)
+## Using as a Go Library
 
-Generate demo traffic:
+StreamLens packages are importable:
+
+```go
+import (
+    "github.com/CodecWhiz/streamlens/cmcd"
+    "github.com/CodecWhiz/streamlens/storage"
+)
+
+// Parse CMCD data
+data, err := cmcd.Parse("br=3200,bs,d=4000,sid=\"abc\"")
+
+// Connect to ClickHouse
+client, err := storage.New(storage.Config{
+    Addr:     "localhost:9000",
+    Database: "streamlens",
+})
+```
+
+## CLI Commands
 
 ```bash
-# From another terminal (or inside the container)
-docker compose -f deployments/docker-compose.yml exec streamlens streamlens demo
+streamlens serve     # Start the CMCD collector server
+streamlens migrate   # Run ClickHouse schema migrations
+streamlens demo      # Generate demo CMCD traffic
 ```
 
-## 🏗️ Architecture
-
-```
-                     ┌──────────────────────┐
-  Video Player ─────▶│                      │
-   (CMCD beacon)     │    StreamLens        │
-                     │    Collector         │──▶ ClickHouse ──▶ Grafana
-  Demo Generator ───▶│    (single Go bin)   │
-                     │                      │
-                     └──────────────────────┘
-
-  POST /v1/cmcd   { "cmcd": "br=3200,bs,d=4000,sid=\"abc\"" }
-  GET  /v1/cmcd?CMCD=br%3D3200%2Cbs%2Cd%3D4000
-  GET  /health
-```
-
-## 📊 What is CMCD?
-
-[CTA-5004](https://cdn.cta.tech/cta/media/media/resources/standards/pdfs/cta-5004-final.pdf) (Common Media Client Data) is an industry standard where video players send delivery metadata with every chunk request. Players like **hls.js**, **dash.js**, **Shaka Player**, and **ExoPlayer** support it natively.
-
-| Key | Meaning | Type |
-|-----|---------|------|
-| `br` | Encoded bitrate (kbps) | Integer |
-| `bl` | Buffer length (ms) | Integer |
-| `bs` | Buffer starvation | Boolean |
-| `d` | Object duration (ms) | Integer |
-| `mtp` | Measured throughput (kbps) | Integer |
-| `ot` | Object type (v/a/av/i/m) | Token |
-| `sf` | Streaming format (h/d) | Token |
-| `st` | Stream type (v/l) | Token |
-| `su` | Startup | Boolean |
-| `sid` | Session ID | String |
-| `cid` | Content ID | String |
-| `tb` | Top bitrate (kbps) | Integer |
-
-## ⚙️ Configuration
-
-All configuration via environment variables:
+## Environment Variables
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+|---|---|---|
 | `CLICKHOUSE_ADDR` | `localhost:9000` | ClickHouse native protocol address |
 | `CLICKHOUSE_DATABASE` | `streamlens` | Database name |
 | `CLICKHOUSE_USERNAME` | `default` | ClickHouse username |
 | `CLICKHOUSE_PASSWORD` | *(empty)* | ClickHouse password |
-| `COLLECTOR_PORT` | `8090` | HTTP collector listen port |
-| `BUFFER_SIZE` | `1000` | Events per batch flush |
-| `FLUSH_INTERVAL` | `5s` | Maximum time between flushes |
-| `COLLECTOR_URL` | `http://localhost:8090` | Target URL for demo generator |
-| `DEMO_SESSIONS` | `50` | Number of simulated sessions |
-| `DEMO_DURATION` | `5m` | Duration of demo generation |
+| `COLLECTOR_PORT` | `8090` | HTTP collector port |
+| `BUFFER_SIZE` | `1000` | Flush buffer size |
+| `FLUSH_INTERVAL` | `5s` | Flush interval |
+| `COLLECTOR_URL` | `http://localhost:8090` | Demo generator target |
 
-## 🔧 Development
+## Project Structure
 
-```bash
-# Build
-make build
-
-# Run tests
-make test
-
-# Run locally (requires ClickHouse)
-make run
-
-# Generate demo traffic
-make demo
+```
+cmcd/           # CMCD parser (importable)
+storage/        # ClickHouse client & migrations (importable)
+collector/      # HTTP collector & batch buffer
+demo/           # Demo traffic generator
+cmd/streamlens/ # CLI binary
+deployments/    # Docker Compose
+dashboards/     # Grafana dashboards
 ```
 
-## 📈 Dashboard Panels
+## StreamLens Pro
 
-The included Grafana dashboard provides:
+For enterprise features including multi-tenant orchestration, K8s operator, CDN connectors, session replay, and geo enrichment, see [StreamLens Pro](https://github.com/CodecWhiz/streamlens-pro).
 
-- **Active Sessions** — unique sessions in last 5 minutes
-- **Rebuffer Rate Over Time** — the #1 QoE metric, per minute
-- **Average Bitrate Over Time** — quality trend
-- **Throughput Distribution** — histogram of measured throughput
-- **CDN Comparison** — rebuffer rate and bitrate by CDN provider
-- **Top Rebuffering Sessions** — table of worst-performing sessions
+## License
 
-## 🤝 Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing`)
-5. Open a Pull Request
-
-## 📜 License
-
-Apache License 2.0 — see [LICENSE](LICENSE) for details.
+Apache License 2.0 — see [LICENSE](LICENSE).

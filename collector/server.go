@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/CodecWhiz/streamlens/internal/cmcd"
+	"github.com/CodecWhiz/streamlens/cmcd"
 )
 
 // Server is the HTTP collector that receives CMCD beacons.

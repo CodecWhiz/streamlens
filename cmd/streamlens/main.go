@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/CodecWhiz/streamlens/internal/collector"
-	"github.com/CodecWhiz/streamlens/internal/demo"
-	"github.com/CodecWhiz/streamlens/internal/storage"
+	"github.com/CodecWhiz/streamlens/collector"
+	"github.com/CodecWhiz/streamlens/demo"
+	"github.com/CodecWhiz/streamlens/storage"
 	"github.com/spf13/cobra"
 )
 

@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/CodecWhiz/streamlens/internal/cmcd"
-	"github.com/CodecWhiz/streamlens/internal/storage"
+	"github.com/CodecWhiz/streamlens/cmcd"
+	"github.com/CodecWhiz/streamlens/storage"
 )
 
 // Buffer collects CMCD events and flushes them to ClickHouse in batches.

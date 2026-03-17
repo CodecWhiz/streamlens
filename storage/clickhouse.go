@@ -8,7 +8,7 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
-	"github.com/CodecWhiz/streamlens/internal/cmcd"
+	"github.com/CodecWhiz/streamlens/cmcd"
 )
 
 // Config holds ClickHouse connection parameters.
@@ -26,6 +26,8 @@ type Client struct {
 }
 
 // New creates a new ClickHouse client.
+// It connects to the "default" database first (which always exists),
+// then creates the target database during migration.
 func New(cfg Config) (*Client, error) {
 	if cfg.Database == "" {
 		cfg.Database = "streamlens"
@@ -37,14 +39,14 @@ func New(cfg Config) (*Client, error) {
 	conn, err := clickhouse.Open(&clickhouse.Options{
 		Addr: []string{cfg.Addr},
 		Auth: clickhouse.Auth{
-			Database: cfg.Database,
+			Database: "default",
 			Username: cfg.Username,
 			Password: cfg.Password,
 		},
 		Settings: clickhouse.Settings{
 			"max_execution_time": 60,
 		},
-		DialTimeout:     5 * time.Second,
+		DialTimeout:     10 * time.Second,
 		ConnMaxLifetime: time.Hour,
 	})
 	if err != nil {
@@ -69,7 +71,7 @@ func (c *Client) InsertEvents(ctx context.Context, events []cmcd.Event) error {
 		return nil
 	}
 
-	batch, err := c.conn.PrepareBatch(ctx, `INSERT INTO cmcd_events (
+	batch, err := c.conn.PrepareBatch(ctx, fmt.Sprintf(`INSERT INTO %s.cmcd_events (`, c.db)+`
 		timestamp, session_id, content_id,
 		encoded_bitrate, buffer_length, buffer_starvation,
 		object_duration, deadline, measured_throughput,
