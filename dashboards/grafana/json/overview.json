@@ -1,0 +1,154 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Active Sessions",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "${DS_CLICKHOUSE}" },
+      "targets": [{
+        "rawSql": "SELECT uniqExact(session_id) AS sessions FROM streamlens.cmcd_events WHERE timestamp >= now() - INTERVAL 5 MINUTE",
+        "format": 1
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 80 }] }
+        }
+      }
+    },
+    {
+      "title": "Events / min",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "${DS_CLICKHOUSE}" },
+      "targets": [{
+        "rawSql": "SELECT count() / 5 AS eps FROM streamlens.cmcd_events WHERE timestamp >= now() - INTERVAL 5 MINUTE",
+        "format": 1
+      }],
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "blue", "value": null }] } } }
+    },
+    {
+      "title": "Rebuffer Rate",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "${DS_CLICKHOUSE}" },
+      "targets": [{
+        "rawSql": "SELECT round(countIf(buffer_starvation = true) * 100.0 / count(), 2) AS rebuffer_pct FROM streamlens.cmcd_events WHERE timestamp >= now() - INTERVAL 5 MINUTE",
+        "format": 1
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 3 }, { "color": "red", "value": 8 }] }
+        }
+      }
+    },
+    {
+      "title": "Avg Bitrate",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "${DS_CLICKHOUSE}" },
+      "targets": [{
+        "rawSql": "SELECT round(avg(encoded_bitrate)) AS avg_br FROM streamlens.cmcd_events WHERE timestamp >= now() - INTERVAL 5 MINUTE AND object_type = 'v'",
+        "format": 1
+      }],
+      "fieldConfig": { "defaults": { "unit": "kbps", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 1500 }, { "color": "green", "value": 3000 }] } } }
+    },
+    {
+      "title": "Rebuffer Rate Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "${DS_CLICKHOUSE}" },
+      "targets": [{
+        "rawSql": "SELECT toStartOfMinute(timestamp) AS time, round(countIf(buffer_starvation = true) * 100.0 / count(), 2) AS rebuffer_pct FROM streamlens.cmcd_events WHERE timestamp >= now() - INTERVAL 1 HOUR GROUP BY time ORDER BY time",
+        "format": 0
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": { "fixedColor": "red", "mode": "fixed" },
+          "custom": { "fillOpacity": 20, "lineWidth": 2, "pointSize": 5 }
+        }
+      }
+    },
+    {
+      "title": "Average Bitrate Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "${DS_CLICKHOUSE}" },
+      "targets": [{
+        "rawSql": "SELECT toStartOfMinute(timestamp) AS time, round(avg(encoded_bitrate)) AS avg_bitrate FROM streamlens.cmcd_events WHERE timestamp >= now() - INTERVAL 1 HOUR AND object_type = 'v' GROUP BY time ORDER BY time",
+        "format": 0
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kbps",
+          "color": { "fixedColor": "green", "mode": "fixed" },
+          "custom": { "fillOpacity": 15, "lineWidth": 2 }
+        }
+      }
+    },
+    {
+      "title": "Throughput Distribution",
+      "type": "histogram",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "${DS_CLICKHOUSE}" },
+      "targets": [{
+        "rawSql": "SELECT measured_throughput FROM streamlens.cmcd_events WHERE timestamp >= now() - INTERVAL 1 HOUR AND measured_throughput > 0",
+        "format": 1
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kbps",
+          "color": { "fixedColor": "blue", "mode": "fixed" }
+        }
+      },
+      "options": { "bucketSize": 5000, "fillOpacity": 80 }
+    },
+    {
+      "title": "CDN Comparison — Rebuffer Rate",
+      "type": "barchart",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "${DS_CLICKHOUSE}" },
+      "targets": [{
+        "rawSql": "SELECT cdn, round(countIf(buffer_starvation = true) * 100.0 / count(), 2) AS rebuffer_pct, round(avg(encoded_bitrate)) AS avg_bitrate FROM streamlens.cmcd_events WHERE timestamp >= now() - INTERVAL 1 HOUR AND cdn != '' GROUP BY cdn ORDER BY rebuffer_pct DESC",
+        "format": 1
+      }],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } } }
+    },
+    {
+      "title": "Top Rebuffering Sessions",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "${DS_CLICKHOUSE}" },
+      "targets": [{
+        "rawSql": "SELECT session_id, countIf(buffer_starvation = true) AS rebuffers, count() AS total_chunks, round(countIf(buffer_starvation = true) * 100.0 / count(), 2) AS rebuffer_pct, round(avg(encoded_bitrate)) AS avg_bitrate, round(avg(measured_throughput)) AS avg_throughput, cdn FROM streamlens.cmcd_events WHERE timestamp >= now() - INTERVAL 1 HOUR GROUP BY session_id, cdn HAVING rebuffers > 0 ORDER BY rebuffers DESC LIMIT 20",
+        "format": 1
+      }]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["streamlens", "cmcd", "video"],
+  "templating": {
+    "list": [{
+      "name": "DS_CLICKHOUSE",
+      "type": "datasource",
+      "query": "grafana-clickhouse-datasource",
+      "current": { "text": "ClickHouse", "value": "ClickHouse" }
+    }]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "StreamLens Overview",
+  "uid": "streamlens-overview",
+  "version": 1
+}

@@ -1,0 +1,53 @@
+version: "3.8"
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.1
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  streamlens:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: ["serve"]
+    ports:
+      - "8090:8090"
+    environment:
+      CLICKHOUSE_ADDR: clickhouse:9000
+      CLICKHOUSE_DATABASE: streamlens
+      COLLECTOR_PORT: "8090"
+      BUFFER_SIZE: "500"
+      FLUSH_INTERVAL: "3s"
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:10.3.1
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: streamlens
+      GF_INSTALL_PLUGINS: grafana-clickhouse-datasource
+    volumes:
+      - ../dashboards/grafana/provisioning:/etc/grafana/provisioning
+      - ../dashboards/grafana/json:/var/lib/grafana/dashboards
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+
+volumes:
+  clickhouse_data:
